@@ -48,17 +48,15 @@ def create_senml_pack(sensor_dict):
     pack.add(longitude)
     return pack
 
-# cf https://www.rabbitmq.com/mqtt.html#implementation for naming rules related to RabbitMQ
-for sensor_dict in sensors:
-    mqtt_topic = MQTT_BROKER_BASE_TOPIC + "/" + sensor_dict['id']
-    pack = create_senml_pack(sensor_dict)
-    pack_as_json = pack.to_json()
-    mqtt_message_info = client.publish(mqtt_topic, pack_as_json)
-    print("Publishing {} to topic {}".format(pack_as_json, mqtt_topic))
+def publist_mqtt_message(sensor_id, senml_message):
+    # cf https://www.rabbitmq.com/mqtt.html#implementation for naming rules related to RabbitMQ
+    mqtt_topic = MQTT_BROKER_BASE_TOPIC + "/" + sensor_id
+    mqtt_message_info = client.publish(mqtt_topic, senml_message)
+    print("Published message {} to topic {}".format(senml_message, mqtt_topic))
 
-# while True:
-#     temp.value = temp.value + 1.1
-#     door_pos.value = not door_pos.value
-#     str_val.value = "test"
-#     print(pack.to_json())
-#     time.sleep(1)
+
+while True:
+    for sensor_dict in sensors:
+        pack = create_senml_pack(sensor_dict)
+        publist_mqtt_message(sensor_dict['id'], pack.to_json())
+    time.sleep(60)
