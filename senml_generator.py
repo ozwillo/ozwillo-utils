@@ -12,6 +12,8 @@ from dateutil import parser
 MQTT_BROKER_HOST = "localhost"
 MQTT_BROKER_PORT = 1883
 MQTT_BROKER_BASE_TOPIC = "iot"
+MQTT_BROKER_LOGIN = "guest"
+MQTT_BROKER_PWD = "guest"
 
 # Set up MQTT broker
 
@@ -19,6 +21,7 @@ def on_connect(client, userdata, flags, rc):
     print("Connected with result code "+str(rc))
 
 client = mqtt.Client()
+client.username_pw_set(MQTT_BROKER_LOGIN, MQTT_BROKER_PWD)
 client.on_connect = on_connect
 client.connect(MQTT_BROKER_HOST, MQTT_BROKER_PORT, 60)
 
