@@ -3,6 +3,9 @@ from kpn_senml import *
 import time
 import paho.mqtt.client as mqtt
 import csv
+import openaq
+from datetime import datetime
+from dateutil import parser
 
 # MQTT broker settings
 
@@ -19,33 +22,49 @@ client = mqtt.Client()
 client.on_connect = on_connect
 client.connect(MQTT_BROKER_HOST, MQTT_BROKER_PORT, 60)
 
-# Load sensors definitions from CSV
+# Experiment when OpenAQ API
 
-sensors = []
-with open('sensors.csv') as sensorsDataFile:
-    csvReader = csv.reader(sensorsDataFile)
-    for row in csvReader:
-        sensor = {
-            'id': row[0],
-            'lat': float(row[1]),
-            'lon': float(row[2])
-        }
-        sensors.append(sensor)
+def load_aq_sensors_definitions():
+    sensors_definitions = []
+    with open('open_aq_locations.csv') as locationsAndParameters:
+        csvReader = csv.reader(locationsAndParameters)
+        for row in csvReader:
+            sensor = {
+                'id': row[0],
+                'name': row[1],
+                'lat': float(row[2]),
+                'lon': float(row[3]),
+                'rawParameters': row[4]
+            }
+            sensors_definitions.append(sensor)
+    return sensors_definitions
 
-print("Loaded sensors definitions :")
-print(sensors)
+sensors_definitions = load_aq_sensors_definitions()
+print("Loaded sensors definitions : {}".format(sensors_definitions))
+
+api = openaq.OpenAQ()
+#resp = api.cities(df=True, limit=10000)
+#print (resp.query("country == 'FR'"))
 
 def create_senml_pack(sensor_dict):
-    sensor_bn = sensor_dict['id']
+    sensor_bn = sensor_dict['id'] + ":" + sensor_dict['name']
     pack = SenmlPack(sensor_bn)
-    temp = SenmlRecord(SenmlNames.KPN_SENML_TEMPERATURE, unit=SenmlUnits.SENML_UNIT_DEGREES_CELSIUS, value=23.5)
-    humidity = SenmlRecord(SenmlNames.KPN_SENML_HUMIDITY, unit=SenmlUnits.SENML_UNIT_RELATIVE_HUMIDITY, value=73.5)
     latitude = SenmlRecord(SenmlNames.KPN_SENML_LATTITUDE, unit=SenmlUnits.SENML_UNIT_DEGREES_LATITUDE, value = sensor_dict['lat'])
     longitude = SenmlRecord(SenmlNames.KPN_SENML_LONGITUDE, unit=SenmlUnits.SENML_UNIT_DEGREES_LONGITUDE, value = sensor_dict['lon'])
-    pack.add(temp)
-    pack.add(humidity)
     pack.add(latitude)
     pack.add(longitude)
+    for parameter in sensor_dict['rawParameters'].split(";"):
+        print("Retrieving latest value for location {} and parameter {}".format(sensor_dict['id'], parameter))
+        status, response = api.latest(location=sensor_dict['id'], parameter=parameter, df=False)
+        print("Received raw data : {}".format(response))
+        measure = response['results'][0]['measurements'][0]
+        last_updated = measure['lastUpdated']
+        last_updated_time = parser.isoparse(last_updated)
+        value = measure['value']
+        unit = measure['unit']
+        print("Got new measure {} {} at {}".format(value, unit, last_updated))
+        record = SenmlRecord(parameter, unit=unit, value=value, time = datetime.timestamp(last_updated_time))
+        pack.add(record)
     return pack
 
 def publist_mqtt_message(sensor_id, senml_message):
@@ -54,9 +73,9 @@ def publist_mqtt_message(sensor_id, senml_message):
     mqtt_message_info = client.publish(mqtt_topic, senml_message)
     print("Published message {} to topic {}".format(senml_message, mqtt_topic))
 
-
 while True:
-    for sensor_dict in sensors:
-        pack = create_senml_pack(sensor_dict)
-        publist_mqtt_message(sensor_dict['id'], pack.to_json())
-    time.sleep(60)
+    for sensor in sensors_definitions:
+        pack = create_senml_pack(sensor)
+        publist_mqtt_message(sensor['id'] + ":" + sensor['name'], pack.to_json())
+    # measures are updated once per hour    
+    time.sleep(60 * 60)

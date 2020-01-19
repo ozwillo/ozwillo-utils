@@ -2,3 +2,4 @@ kpn-senml
 paho-mqtt
 requests>=2.13.0
 tinydb>=3.2.2
+py-openaq
