@@ -23,7 +23,6 @@ def on_connect(client, userdata, flags, rc):
 client = mqtt.Client()
 client.username_pw_set(MQTT_BROKER_LOGIN, MQTT_BROKER_PWD)
 client.on_connect = on_connect
-client.connect(MQTT_BROKER_HOST, MQTT_BROKER_PORT, 60)
 
 # Experiment when OpenAQ API
 
@@ -77,8 +76,10 @@ def publist_mqtt_message(sensor_id, senml_message):
     print("Published message {} to topic {}".format(senml_message, mqtt_topic))
 
 while True:
+    client.connect(MQTT_BROKER_HOST, MQTT_BROKER_PORT, 60)
     for sensor in sensors_definitions:
         pack = create_senml_pack(sensor)
         publist_mqtt_message(sensor['id'] + ":" + sensor['name'], pack.to_json())
-    # measures are updated once per hour    
+    client.disconnect() 
+    # measures are updated once per hour
     time.sleep(60 * 60)
