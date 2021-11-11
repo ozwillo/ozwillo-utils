@@ -13,8 +13,6 @@ import argparse
 import logging
 _log = logging.getLogger(__name__)
 
-import time
-
 import db
 
 # kernel adresses
@@ -27,7 +25,7 @@ token_url = ozwillo_base_url + '/a/token'
 username = 'your.email@somewhere.com'
 password = 'your.password'
 
-# app credentials and settings
+# id and secret corresponding to our APP in the ozwillo backend
 client_id = "your.client.id"
 client_secret = "your.client.secret.generated.at.provisioning"
 scope = ["openid", "offline_access", "datacore", "profile", "email"]
@@ -51,7 +49,15 @@ def get_cookied_session():
 
     headers = {'referer': login_url}
 
-    r = s.post(login_url, data=payload, headers=headers)
+    _log.debug("calling login url on {}".format(login_url))
+    try:
+        r = s.post(login_url, data=payload, headers=headers, allow_redirects=True)
+    except:
+        # got some weird "urllib3.exceptions.ProtocolError: ('Connection aborted.', ConnectionResetError(54, 'Connection reset by peer'))"
+        # whereas the request was successfully processed by the kernel
+        # so just ignore any error here (but a cleaner solution should be found)
+        return s
+
     return s
 
 def get_auth_page(s):
@@ -82,6 +88,12 @@ def get_code(s):
     r = s.post(auth_url+"/approve", data=payload, headers=headers, allow_redirects=False)
     location = r.headers['Location']
     code = ""
+
+    _log.debug("request URL : {}".format(r.request.url))
+    _log.debug("request headers : {}".format(pprint.pformat(r.request.headers)))
+    _log.debug("request body : {}".format(pprint.pformat(r.request.body)))
+    _log.debug("response status : {} , reason : {}".format(r, r.reason))
+    _log.debug("response body : {}".format(r.content))
 
     try :
         code = re.search("code=[a-zA-Z0-9_-]*", location).group(0)
@@ -198,6 +210,7 @@ def get_token_via_auth():
         _log.debug("REQ HEADERS : {}".format(pprint.pformat(r.request.headers)))
         _log.debug("REQ BODY : {}".format(pprint.pformat(r.request.body)))
         _log.debug("REQ RESULT : {} , reason : {}".format(r, r.reason))
+        _log.debug("RESP BODY : {}".format(r.content))
         return False
 
     # We've gotten a valid token now, store it
